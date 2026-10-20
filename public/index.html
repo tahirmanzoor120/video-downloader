@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>X Video Downloader</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#111; --muted:#666; --accent:#1d9bf0; --border:#e3e6ea; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b0d10; --card:#15181c; --fg:#eee; --muted:#9aa0a6; --border:#2a2f36; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:48px 16px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 24px; }
+  form { display:flex; gap:8px; }
+  input { flex:1; min-width:0; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--fg); font:inherit; }
+  button, a.btn { padding:12px 18px; border:0; border-radius:10px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  button:disabled { opacity:.6; cursor:wait; }
+  #error { color:#e0245e; margin-top:12px; min-height:1.5em; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-top:16px; }
+  video { width:100%; border-radius:10px; background:#000; max-height:420px; }
+  .meta { margin:12px 0; } .meta small { color:var(--muted); }
+  .opts { display:flex; flex-wrap:wrap; gap:8px; }
+  .opts a.btn:not(:first-child) { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>X Video Downloader</h1>
+  <p class="sub">Paste a link to a post and download its video as MP4.</p>
+  <form id="f">
+    <input id="url" type="url" placeholder="https://x.com/user/status/123…" required autofocus>
+    <button id="go">Download</button>
+  </form>
+  <div id="error"></div>
+  <div id="out"></div>
+  <p class="sub" style="margin-top:32px;font-size:13px">Only download videos you have the right to save. Not affiliated with X Corp.</p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("error").textContent = ""; $("out").innerHTML = "";
+  $("go").disabled = true; $("go").textContent = "Fetching…";
+  try {
+    const r = await fetch("/api/info?url=" + encodeURIComponent($("url").value));
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    $("out").innerHTML = d.videos.map((v, i) => {
+      const vs = v.variants.length ? v.variants : [{ url: v.fallback, bitrate: 0, resolution: null }];
+      const btns = vs.map((x, j) => {
+        const label = x.resolution ? x.resolution.split("x")[1] + "p" : "MP4";
+        const name = `${d.handle}-${i + 1}-${label}`;
+        return `<a class="btn" href="/api/download?url=${encodeURIComponent(x.url)}&name=${encodeURIComponent(name)}">${j === 0 ? "Best · " : ""}${label}</a>`;
+      }).join("");
+      return `<div class="card">
+        <video controls playsinline poster="${esc(v.thumbnail)}" src="${esc(vs[0].url)}"></video>
+        <div class="meta"><b>${esc(d.author)}</b> <small>@${esc(d.handle)}</small><br><small>${esc(d.text)}</small></div>
+        <div class="opts">${btns}</div></div>`;
+    }).join("");
+  } catch (err) {
+    $("error").textContent = err.message;
+  } finally {
+    $("go").disabled = false; $("go").textContent = "Download";
+  }
+});
+</script>
+</body>
+</html>
